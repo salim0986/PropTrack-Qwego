@@ -1,6 +1,6 @@
-import { db } from "@/../db";
-import { notificationsTable } from "@/../db/schema";
-import type { notificationTypeEnum } from "@/../db/schema";
+import { db } from "@/db";
+import { notificationsTable, usersTable } from "@/db/schema";
+import type { notificationTypeEnum } from "@/db/schema";
 
 type NotificationType = typeof notificationTypeEnum.enumValues[number];
 
@@ -24,7 +24,7 @@ export async function sendNotification(payload: NotifyPayload) {
 
     // 2. Fetch User to determine external channels
     const user = await db.query.usersTable.findFirst({
-        where: (users, { eq }) => eq(users.id, payload.userId),
+        where: (users: any, { eq }: any) => eq(users.id, payload.userId),
         columns: { telegramChatId: true, discordWebhook: true },
     });
 

@@ -1,7 +1,7 @@
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
-import type { priorityEnum } from "@/../db/schema";
+import type { priorityEnum } from "@/db/schema";
 import { AlertCircle, ArrowUp, ArrowDown, Minus } from "lucide-react";
 
 type PriorityType = typeof priorityEnum.enumValues[number];
@@ -34,12 +34,13 @@ export function PriorityBadge({
     priority,
     ...props
 }: PriorityBadgeProps) {
-    const Icon = {
+    const PRIORITY_ICONS = {
         LOW: ArrowDown,
         MEDIUM: Minus,
         HIGH: ArrowUp,
         URGENT: AlertCircle,
-    }[priority];
+    };
+    const Icon = PRIORITY_ICONS[priority as keyof typeof PRIORITY_ICONS];
 
     return (
         <div className={cn(priorityVariants({ priority }), className)} {...props}>
