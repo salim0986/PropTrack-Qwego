@@ -4,24 +4,36 @@ import * as React from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { Building, ArrowRight, Loader2 } from "lucide-react";
+import { Building, ArrowRight, Loader2, User, Wrench, Shield } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
+
+const DEMO_CREDENTIALS = [
+    { role: "Tenant", email: "tenant@proptrack.io", password: "Demo1234!", icon: User, color: "text-pt-green" },
+    { role: "Manager", email: "manager@proptrack.io", password: "Demo1234!", icon: Shield, color: "text-pt-purple" },
+    { role: "Technician", email: "tech@proptrack.io", password: "Demo1234!", icon: Wrench, color: "text-pt-accent" },
+];
 
 export default function LoginPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+
+    function autofill(cred: typeof DEMO_CREDENTIALS[0]) {
+        setEmail(cred.email);
+        setPassword(cred.password);
+        toast.info(`Demo: ${cred.role}`, { description: cred.email, duration: 2000 });
+    }
 
     async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
         setLoading(true);
-
-        const formData = new FormData(e.currentTarget);
-        const email = formData.get("email") as string;
-        const password = formData.get("password") as string;
 
         const res = await signIn("credentials", {
             email,
@@ -30,7 +42,25 @@ export default function LoginPage() {
         });
 
         if (res?.error) {
-            toast.error(res.error, {
+            // Handle structured error codes from auth.ts
+            if (res.error.includes("ACCOUNT_PENDING") || res.error === "CredentialsSignin" && res.code === "ACCOUNT_PENDING") {
+                router.push("/pending?status=PENDING");
+                return;
+            }
+            if (res.error.includes("ACCOUNT_REJECTED")) {
+                router.push("/pending?status=REJECTED");
+                return;
+            }
+            // Check for the raw error code passed through NextAuth
+            if (res.code === "ACCOUNT_PENDING") {
+                router.push("/pending?status=PENDING");
+                return;
+            }
+            if (res.code === "ACCOUNT_REJECTED") {
+                router.push("/pending?status=REJECTED");
+                return;
+            }
+            toast.error("Invalid credentials", {
                 description: "Please check your email and password.",
             });
             setLoading(false);
@@ -38,7 +68,6 @@ export default function LoginPage() {
             toast.success("Welcome back!", {
                 description: "Redirecting to your dashboard...",
             });
-            // Force hard navigation to reset app state safely and allow layout gatekeeping
             router.push("/");
             router.refresh();
         }
@@ -57,9 +86,32 @@ export default function LoginPage() {
                         <Building className="w-6 h-6 text-pt-accent" />
                     </div>
 
-                    <div className="text-center space-y-1.5 mb-8">
+                    <div className="text-center space-y-1.5 mb-6">
                         <h1 className="text-2xl font-bold tracking-tight text-pt-text">Welcome back</h1>
-                        <p className="text-sm text-pt-text-dim">Enter your credentials to continue to PropTrack.</p>
+                        <p className="text-sm text-pt-text-dim">Sign in to PropTrack.</p>
+                    </div>
+
+                    {/* Demo Credential Quick Fill */}
+                    <div className="w-full mb-6">
+                        <p className="text-xs text-pt-text-muted mb-2 text-center">Quick Demo Login</p>
+                        <div className="flex gap-2">
+                            {DEMO_CREDENTIALS.map((cred) => {
+                                const Icon = cred.icon;
+                                return (
+                                    <button
+                                        key={cred.role}
+                                        type="button"
+                                        onClick={() => autofill(cred)}
+                                        className={cn(
+                                            "flex-1 flex flex-col items-center gap-1 py-2.5 px-1 rounded-xl border border-pt-border hover:border-pt-accent/40 bg-pt-surface-light transition-all",
+                                        )}
+                                    >
+                                        <Icon className={cn("w-4 h-4", cred.color)} />
+                                        <span className="text-[10px] text-pt-text-muted font-medium">{cred.role}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
 
                     <form onSubmit={handleLogin} className="w-full space-y-4">
@@ -72,22 +124,21 @@ export default function LoginPage() {
                                 placeholder="name@example.com"
                                 required
                                 autoComplete="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
                                 className="bg-pt-surface-light border-pt-border/50 focus-visible:ring-pt-accent h-11"
                             />
                         </div>
 
                         <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="password" className="text-pt-text-muted">Password</Label>
-                                <a href="#" className="text-xs text-pt-accent hover:underline font-medium">
-                                    Forgot password?
-                                </a>
-                            </div>
+                            <Label htmlFor="password" className="text-pt-text-muted">Password</Label>
                             <Input
                                 id="password"
                                 name="password"
                                 type="password"
                                 required
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
                                 autoComplete="current-password"
                                 className="bg-pt-surface-light border-pt-border/50 focus-visible:ring-pt-accent h-11"
                             />
@@ -109,11 +160,11 @@ export default function LoginPage() {
                         </Button>
                     </form>
 
-                    <div className="mt-8 text-center text-sm text-pt-text-muted">
+                    <div className="mt-6 text-center text-sm text-pt-text-muted">
                         Don&apos;t have an account?{" "}
-                        <a href="#" className="text-pt-accent font-medium hover:underline">
-                            Request access
-                        </a>
+                        <Link href="/register" className="text-pt-accent font-medium hover:underline">
+                            Register
+                        </Link>
                     </div>
                 </div>
             </motion.div>

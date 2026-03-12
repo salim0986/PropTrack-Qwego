@@ -1,223 +1,178 @@
 "use client";
 
-import * as React from "react";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-    Camera,
-    ChevronRight,
-    ChevronLeft,
-    Loader2,
-    AlertTriangle,
-    CheckCircle2,
-    X,
-    Plus
-} from "lucide-react";
 import { toast } from "sonner";
+import { ChevronLeft, ImagePlus, Loader2, AlertTriangle, CheckCircle2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AfterHoursBanner } from "@/components/shared/AfterHoursBanner";
-import { isAfterHours as checkAfterHours } from "@/lib/after-hours";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
-const CATEGORIES = [
-    { value: "PLUMBING", label: "Plumbing", description: "Leaks, toilets, faucets" },
-    { value: "ELECTRICAL", label: "Electrical", description: "Outlets, lights, breakers" },
-    { value: "HVAC", label: "Heating & Cooling", description: "AC, heater, ventilation" },
-    { value: "STRUCTURAL", label: "Structural", description: "Walls, ceiling, windows" },
-    { value: "OTHER", label: "Other", description: "General maintenance" },
-];
+const CATEGORIES = ["PLUMBING", "ELECTRICAL", "HVAC", "STRUCTURAL", "OTHER"] as const;
+const PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
+const PRIORITY_COLORS: Record<string, string> = {
+    LOW: "border-pt-green/30 bg-pt-green/5 text-pt-green",
+    MEDIUM: "border-pt-yellow/30 bg-pt-yellow/5 text-pt-yellow",
+    HIGH: "border-pt-red/30 bg-pt-red/5 text-pt-red",
+    URGENT: "border-pt-red bg-pt-red/10 text-pt-red font-bold",
+};
 
 export default function NewTicketPage() {
     const router = useRouter();
     const [step, setStep] = useState(1);
-    const [loading, setLoading] = useState(false);
-    const [afterHours] = useState(() => checkAfterHours());
-    const [images, setImages] = useState<File[]>([]);
-    const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+    const [submitting, setSubmitting] = useState(false);
+    const [uploadingImage, setUploadingImage] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const [formData, setFormData] = useState({
-        title: "",
-        description: "",
-        category: "",
-        priority: "MEDIUM",
-    });
+    const [category, setCategory] = useState<string>("");
+    const [priority, setPriority] = useState<string>("MEDIUM");
+    const [title, setTitle] = useState("");
+    const [description, setDescription] = useState("");
+    const [imageUrls, setImageUrls] = useState<string[]>([]);
 
-    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
-            const files = Array.from(e.target.files);
-            if (images.length + files.length > 3) {
-                toast.error("Maximum 3 images allowed");
-                return;
-            }
-            setImages(prev => [...prev, ...files]);
-            const urls = files.map(file => URL.createObjectURL(file));
-            setPreviewUrls(prev => [...prev, ...urls]);
-        }
-    };
+    async function uploadPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (imageUrls.length >= 3) { toast.error("Maximum 3 images"); return; }
 
-    const removeImage = (index: number) => {
-        setImages(prev => prev.filter((_, i) => i !== index));
-        setPreviewUrls(prev => prev.filter((_, i) => i !== index));
-    };
-
-    const nextStep = () => {
-        if (step === 1) {
-            if (!formData.title || !formData.description || !formData.category) {
-                toast.error("Please fill in all required fields");
-                return;
-            }
-        }
-        setStep(prev => prev + 1);
-    };
-
-    const prevStep = () => setStep(prev => prev - 1);
-
-    const handleSubmit = async () => {
-        setLoading(true);
+        setUploadingImage(true);
         try {
-            // 1. Upload Images to Supabase if any
-            const uploadedUrls: string[] = [];
-            if (images.length > 0) {
-                const supabase = createClient();
-                for (const file of images) {
-                    const fileExt = file.name.split('.').pop();
-                    const fileName = `${Math.random()}.${fileExt}`;
-                    const filePath = `tickets/${fileName}`;
-
-                    const { error: uploadError } = await supabase.storage
-                        .from('ticket-images')
-                        .upload(filePath, file);
-
-                    if (uploadError) throw uploadError;
-
-                    const { data: { publicUrl } } = supabase.storage
-                        .from('ticket-images')
-                        .getPublicUrl(filePath);
-
-                    uploadedUrls.push(publicUrl);
-                }
-            }
-
-            // 2. Submit Ticket via Server Action
-            // (We will implement this action in the next step)
-            const response = await fetch("/api/tickets", {
-                method: "POST",
-                body: JSON.stringify({ ...formData, imageUrls: uploadedUrls }),
-                headers: { "Content-Type": "application/json" },
-            });
-
-            if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.message || "Failed to submit ticket");
-            }
-
-            toast.success("Ticket submitted successfully!", {
-                description: "A technician will be assigned soon.",
-            });
-            router.push("/tenant/dashboard");
-            router.refresh();
-
-        } catch (error: any) {
-            toast.error("Submission failed", {
-                description: error.message || "Something went wrong. Please try again.",
-            });
+            const formData = new FormData();
+            formData.append("file", file);
+            const res = await fetch("/api/uploads", { method: "POST", body: formData });
+            if (!res.ok) { const d = await res.json(); throw new Error(d.message); }
+            const { url } = await res.json();
+            setImageUrls((prev) => [...prev, url]);
+            toast.success("Photo attached");
+        } catch (err: any) {
+            toast.error(err.message || "Upload failed");
         } finally {
-            setLoading(false);
+            setUploadingImage(false);
         }
-    };
+    }
+
+    async function handleSubmit() {
+        if (!category || !title.trim() || description.trim().length < 10) {
+            toast.error("Please fill out all required fields");
+            return;
+        }
+        setSubmitting(true);
+        try {
+            const res = await fetch("/api/tickets", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ title, description, category, priority, imageUrls }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message);
+            toast.success("Request submitted!", { description: "A manager will assign a technician shortly." });
+            router.push("/tenant/dashboard");
+        } catch (err: any) {
+            toast.error(err.message || "Submission failed");
+        } finally {
+            setSubmitting(false);
+        }
+    }
 
     return (
-        <div className="max-w-md mx-auto space-y-6 pb-10">
-            <div className="flex items-center gap-3">
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => step === 1 ? router.back() : prevStep()}
-                    className="rounded-full bg-pt-surface-light border border-pt-border/50"
+        <div className="flex flex-col gap-4 p-4 pb-28">
+            <AfterHoursBanner />
+
+            {/* Header */}
+            <div className="flex items-center gap-3 pt-1">
+                <button
+                    onClick={() => step > 1 ? setStep(1) : router.back()}
+                    className="w-9 h-9 rounded-xl bg-pt-surface-light border border-pt-border flex items-center justify-center"
                 >
-                    <ChevronLeft className="w-5 h-5" />
-                </Button>
-                <h1 className="text-xl font-bold text-pt-text">Report Issue</h1>
+                    <ChevronLeft className="w-4 h-4 text-pt-text" />
+                </button>
+                <div>
+                    <p className="text-pt-text-dim text-xs">Step {step} of 2</p>
+                    <h1 className="text-xl font-bold text-pt-text tracking-tight">
+                        {step === 1 ? "What's the issue?" : "Describe it"}
+                    </h1>
+                </div>
             </div>
 
-            {/* Progress Bar */}
-            <div className="flex gap-2">
-                <div className={cn("h-1.5 flex-1 rounded-full bg-pt-accent transition-all duration-500", step === 2 ? "opacity-100" : "opacity-30")} />
-                <div className={cn("h-1.5 flex-1 rounded-full bg-pt-accent transition-all duration-500", step === 2 ? "opacity-100" : "opacity-30")} />
+            {/* Step Indicator */}
+            <div className="flex gap-1.5">
+                {[1, 2].map((s) => (
+                    <div key={s} className={cn(
+                        "h-1 rounded-full flex-1 transition-all",
+                        s <= step ? "bg-pt-accent" : "bg-pt-border"
+                    )} />
+                ))}
             </div>
-
-            <AfterHoursBanner isAfterHours={afterHours} />
 
             <AnimatePresence mode="wait">
                 {step === 1 ? (
                     <motion.div
                         key="step1"
-                        initial={{ opacity: 0, x: -20 }}
+                        initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: 20 }}
-                        className="space-y-6"
+                        exit={{ opacity: 0, x: -20 }}
+                        className="flex flex-col gap-4"
                     >
-                        <div className="space-y-4">
-                            <div className="space-y-2">
-                                <Label className="text-pt-text-muted">Issue Category</Label>
-                                <div className="grid grid-cols-1 gap-2">
-                                    {CATEGORIES.map((cat) => (
-                                        <button
-                                            key={cat.value}
-                                            onClick={() => setFormData(prev => ({ ...prev, category: cat.value }))}
-                                            className={cn(
-                                                "flex items-center justify-between p-4 rounded-xl border text-left transition-all active:scale-[0.98]",
-                                                formData.category === cat.value
-                                                    ? "bg-pt-accent/10 border-pt-accent text-pt-accent shadow-sm ring-1 ring-pt-accent"
-                                                    : "bg-pt-surface border-pt-border/60 text-pt-text-dim hover:border-pt-accent/40"
-                                            )}
-                                        >
-                                            <div>
-                                                <p className="font-semibold text-sm">{cat.label}</p>
-                                                <p className="text-[10px] opacity-70 mt-0.5">{cat.description}</p>
-                                            </div>
-                                            {formData.category === cat.value && <CheckCircle2 className="w-5 h-5" />}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="title" className="text-pt-text-muted">Quick Title</Label>
-                                <Input
-                                    id="title"
-                                    placeholder="e.g. Kitchen sink leaking"
-                                    value={formData.title}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                                    className="h-12 bg-pt-surface border-pt-border/60 rounded-xl"
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="description" className="text-pt-text-muted">Details</Label>
-                                <Textarea
-                                    id="description"
-                                    placeholder="Explain the problem in detail..."
-                                    rows={4}
-                                    value={formData.description}
-                                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                                    className="bg-pt-surface border-pt-border/60 rounded-xl resize-none"
-                                />
+                        {/* Category */}
+                        <div>
+                            <Label className="text-pt-text-muted mb-2 block">Issue Category *</Label>
+                            <div className="grid grid-cols-2 gap-2">
+                                {CATEGORIES.map((c) => (
+                                    <button
+                                        key={c}
+                                        onClick={() => setCategory(c)}
+                                        className={cn(
+                                            "h-11 rounded-xl border text-sm font-medium transition-all",
+                                            category === c
+                                                ? "bg-pt-accent border-pt-accent text-white"
+                                                : "bg-pt-surface-light border-pt-border text-pt-text-muted hover:text-pt-text"
+                                        )}
+                                    >
+                                        {c}
+                                    </button>
+                                ))}
                             </div>
                         </div>
 
+                        {/* Priority */}
+                        <div>
+                            <Label className="text-pt-text-muted mb-2 block">Priority</Label>
+                            <div className="grid grid-cols-2 gap-2">
+                                {PRIORITIES.map((p) => (
+                                    <button
+                                        key={p}
+                                        onClick={() => setPriority(p)}
+                                        className={cn(
+                                            "h-11 rounded-xl border text-sm font-medium transition-all",
+                                            priority === p ? PRIORITY_COLORS[p] : "bg-pt-surface-light border-pt-border text-pt-text-muted"
+                                        )}
+                                    >
+                                        {p === "URGENT" && "🔴 "}
+                                        {p === "HIGH" && "🟠 "}
+                                        {p}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {priority === "URGENT" && (
+                            <div className="bg-pt-red/10 border border-pt-red/30 rounded-xl p-3 flex gap-2 items-start">
+                                <AlertTriangle className="w-4 h-4 text-pt-red shrink-0 mt-0.5" />
+                                <p className="text-xs text-pt-red">
+                                    URGENT requests will be escalated immediately and may require emergency contact.
+                                </p>
+                            </div>
+                        )}
+
                         <Button
-                            onClick={nextStep}
-                            className="w-full h-14 bg-pt-accent hover:bg-pt-accent/90 text-white rounded-xl shadow-lg shadow-pt-accent/20 font-bold"
+                            className="h-11 bg-pt-accent hover:bg-pt-accent/90 text-white mt-2"
+                            disabled={!category}
+                            onClick={() => setStep(2)}
                         >
-                            Continue
-                            <ChevronRight className="w-5 h-5 ml-2" />
+                            Next — Add Details
                         </Button>
                     </motion.div>
                 ) : (
@@ -226,107 +181,87 @@ export default function NewTicketPage() {
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -20 }}
-                        className="space-y-6"
+                        className="flex flex-col gap-4"
                     >
-                        <div className="space-y-4">
-                            <div className="bg-pt-surface-light border border-pt-border/50 rounded-2xl p-6 flex flex-col items-center text-center space-y-4">
-                                <div className="w-16 h-16 bg-pt-accent/10 rounded-full flex items-center justify-center">
-                                    <Camera className="w-8 h-8 text-pt-accent" />
-                                </div>
-                                <div className="space-y-1">
-                                    <h3 className="font-bold text-pt-text text-lg">Add Photos</h3>
-                                    <p className="text-sm text-pt-text-dim max-w-[200px]">
-                                        Visuals help our technicians arrive prepared with the right tools.
-                                    </p>
-                                </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="title" className="text-pt-text-muted">Title *</Label>
+                            <Input
+                                id="title"
+                                placeholder="e.g. Kitchen faucet dripping constantly"
+                                value={title}
+                                onChange={(e) => setTitle(e.target.value)}
+                                maxLength={100}
+                                className="bg-pt-surface-light border-pt-border/50 h-11 focus-visible:ring-pt-accent"
+                            />
+                        </div>
 
-                                <input
-                                    type="file"
-                                    id="images"
-                                    multiple
-                                    accept="image/*"
-                                    onChange={handleImageChange}
-                                    className="hidden"
-                                />
-                                <Label
-                                    htmlFor="images"
-                                    className="cursor-pointer border border-pt-accent text-pt-accent hover:bg-pt-accent/5 rounded-xl px-6 py-2 h-10 inline-flex items-center justify-center text-sm font-medium transition-colors"
-                                >
-                                    Capture or Upload
-                                </Label>
-                            </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="desc" className="text-pt-text-muted">Description *</Label>
+                            <textarea
+                                id="desc"
+                                className="w-full bg-pt-surface-light border border-pt-border/50 rounded-xl p-3 text-sm text-pt-text h-28 resize-none focus:outline-none focus:ring-1 focus:ring-pt-accent"
+                                placeholder="Describe when it started, how severe it is..."
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                            />
+                            <p className="text-xs text-pt-text-muted text-right">{description.length} / min 10 chars</p>
+                        </div>
 
-                            {previewUrls.length > 0 && (
-                                <div className="grid grid-cols-3 gap-3">
-                                    {previewUrls.map((url, i) => (
-                                        <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-pt-border">
-                                            <img src={url} alt="Preview" className="w-full h-full object-cover" />
-                                            <button
-                                                onClick={() => removeImage(i)}
-                                                className="absolute top-1 right-1 bg-black/60 text-white p-1 rounded-full active:scale-90"
-                                            >
-                                                <X className="w-3 h-3" />
-                                            </button>
-                                        </div>
-                                    ))}
-                                    {previewUrls.length < 3 && (
-                                        <label
-                                            htmlFor="images"
-                                            className="border-2 border-dashed border-pt-border rounded-xl flex items-center justify-center cursor-pointer hover:border-pt-accent transition-colors"
-                                        >
-                                            <Plus className="w-6 h-6 text-pt-text-muted" />
-                                        </label>
-                                    )}
-                                </div>
-                            )}
-
-                            <div className="space-y-2">
-                                <Label className="text-pt-text-muted">Priority</Label>
-                                <div className="flex gap-2">
-                                    {["LOW", "MEDIUM", "HIGH"].map((p) => (
+                        {/* Photo Attach */}
+                        <div className="space-y-2">
+                            <Label className="text-pt-text-muted">Photos (optional, max 3)</Label>
+                            <div className="flex gap-2 flex-wrap">
+                                {imageUrls.map((url, i) => (
+                                    <div key={i} className="relative w-20 h-20">
+                                        <img src={url} alt="" className="w-20 h-20 object-cover rounded-xl border border-pt-border" />
                                         <button
-                                            key={p}
-                                            onClick={() => setFormData(prev => ({ ...prev, priority: p }))}
-                                            className={cn(
-                                                "flex-1 py-3 rounded-xl border text-xs font-bold transition-all",
-                                                formData.priority === p
-                                                    ? "bg-pt-accent text-white border-pt-accent"
-                                                    : "bg-pt-surface border-pt-border/60 text-pt-text-dim"
-                                            )}
+                                            onClick={() => setImageUrls((prev) => prev.filter((_, j) => j !== i))}
+                                            className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-pt-red rounded-full flex items-center justify-center"
                                         >
-                                            {p}
+                                            <X className="w-3 h-3 text-white" />
                                         </button>
-                                    ))}
-                                </div>
+                                    </div>
+                                ))}
+                                {imageUrls.length < 3 && (
+                                    <button
+                                        onClick={() => fileInputRef.current?.click()}
+                                        disabled={uploadingImage}
+                                        className="w-20 h-20 rounded-xl border-2 border-dashed border-pt-border flex items-center justify-center bg-pt-surface-light hover:border-pt-accent/50 transition-colors"
+                                    >
+                                        {uploadingImage ? (
+                                            <Loader2 className="w-5 h-5 animate-spin text-pt-text-muted" />
+                                        ) : (
+                                            <ImagePlus className="w-5 h-5 text-pt-text-muted" />
+                                        )}
+                                    </button>
+                                )}
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp"
+                                    className="hidden"
+                                    onChange={uploadPhoto}
+                                />
                             </div>
                         </div>
 
-                        <div className="space-y-3">
-                            <Button
-                                onClick={handleSubmit}
-                                disabled={loading}
-                                className="w-full h-14 bg-pt-accent hover:bg-pt-accent/90 text-white rounded-xl shadow-lg shadow-pt-accent/20 font-bold"
-                            >
-                                {loading ? (
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                ) : (
-                                    "Submit Report"
-                                )}
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                onClick={prevStep}
-                                disabled={loading}
-                                className="w-full h-11 text-pt-text-muted"
-                            >
-                                Go Back
-                            </Button>
-                        </div>
+                        <Button
+                            className="h-11 bg-pt-accent hover:bg-pt-accent/90 text-white mt-2"
+                            disabled={submitting || !title.trim() || description.trim().length < 10}
+                            onClick={handleSubmit}
+                        >
+                            {submitting ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                                <>
+                                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                                    Submit Request
+                                </>
+                            )}
+                        </Button>
                     </motion.div>
                 )}
             </AnimatePresence>
         </div>
     );
 }
-
-

@@ -120,6 +120,13 @@ export const registrationRequestsTable = pgTable("registration_requests", {
   reviewedAt: timestamp("reviewed_at"),
 });
 
+export const telegramVerificationsTable = pgTable("telegram_verifications", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").notNull().unique(), // FK to users
+  code: text("code").notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const ticketRatingsTable = pgTable("ticket_ratings", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   ticketId: text("ticket_id").notNull().unique(), // FK to tickets
@@ -154,6 +161,10 @@ export const usersRelations = relations(usersTable, ({ one, many }) => ({
   registrationRequest: one(registrationRequestsTable, {
     fields: [usersTable.id],
     references: [registrationRequestsTable.userId],
+  }),
+  telegramVerification: one(telegramVerificationsTable, {
+    fields: [usersTable.id],
+    references: [telegramVerificationsTable.userId],
   }),
   ratingsGiven: many(ticketRatingsTable),
 }));
@@ -230,6 +241,13 @@ export const notificationsRelations = relations(notificationsTable, ({ one }) =>
 export const registrationRequestsRelations = relations(registrationRequestsTable, ({ one }) => ({
   user: one(usersTable, {
     fields: [registrationRequestsTable.userId],
+    references: [usersTable.id],
+  }),
+}));
+
+export const telegramVerificationsRelations = relations(telegramVerificationsTable, ({ one }) => ({
+  user: one(usersTable, {
+    fields: [telegramVerificationsTable.userId],
     references: [usersTable.id],
   }),
 }));

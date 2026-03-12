@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { ticketsTable } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
-import { Plus, Ticket, MessageSquare } from "lucide-react";
+import { Plus, Ticket, MessageSquare, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { PriorityBadge } from "@/components/shared/PriorityBadge";
@@ -123,22 +123,3 @@ export default async function TenantDashboard() {
     );
 }
 
-function ArrowRight(props: any) {
-    return (
-        <svg
-            {...props}
-            xmlns="http://www.w3.org/2000/svg"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-        >
-            <path d="M5 12h14" />
-            <path d="m12 5 7 7-7 7" />
-        </svg>
-    );
-}

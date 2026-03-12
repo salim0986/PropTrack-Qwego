@@ -18,32 +18,36 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                     .object({ email: z.string().email(), password: z.string().min(6) })
                     .safeParse(credentials);
 
-                if (parsedCredentials.success) {
-                    const { email, password } = parsedCredentials.data;
+                if (!parsedCredentials.success) return null;
 
-                    const user = await db.query.usersTable.findFirst({
-                        where: eq(usersTable.email, email),
-                    });
+                const { email, password } = parsedCredentials.data;
 
-                    if (!user) return null;
+                const user = await db.query.usersTable.findFirst({
+                    where: eq(usersTable.email, email),
+                });
 
-                    if (user.status !== "ACTIVE") {
-                        // They exist but aren't active (PENDING or REJECTED)
-                        throw new Error(`Your account is currently ${user.status.toLowerCase()}.`);
-                    }
+                if (!user) return null;
 
-                    const passwordsMatch = await bcrypt.compare(password, user.passwordHash);
-                    if (passwordsMatch) {
-                        return {
-                            id: user.id,
-                            name: user.name,
-                            email: user.email,
-                            role: user.role,
-                            buildingId: user.buildingId,
-                        } as any;
-                    }
+                // Block PENDING and REJECTED users with specific error codes
+                // The login page reads these to redirect to /pending
+                if (user.status === "PENDING") {
+                    throw new Error("ACCOUNT_PENDING");
                 }
-                return null; // Invalid credentials
+                if (user.status === "REJECTED") {
+                    throw new Error("ACCOUNT_REJECTED");
+                }
+
+                const passwordsMatch = await bcrypt.compare(password, user.passwordHash);
+                if (!passwordsMatch) return null;
+
+                return {
+                    id: user.id,
+                    name: user.name,
+                    email: user.email,
+                    role: user.role,
+                    status: user.status,
+                    buildingId: user.buildingId,
+                } as any;
             },
         }),
     ],
@@ -70,5 +74,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     pages: {
         signIn: "/login",
+        error: "/login",
     },
 });

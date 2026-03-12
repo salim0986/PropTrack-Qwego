@@ -65,7 +65,7 @@ export default function CompleteTicketPage() {
                 body: JSON.stringify({
                     action: "COMPLETE",
                     resolutionNotes: notes,
-                    imageUrl: uploadedUrl,
+                    imageUrls: uploadedUrl ? [uploadedUrl] : [],
                 }),
             });
             if (!res.ok) {

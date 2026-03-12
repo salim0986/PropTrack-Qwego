@@ -3,14 +3,82 @@ import { db } from "@/db";
 import { ticketsTable, ticketImagesTable, activityLogsTable, usersTable, buildingsTable } from "@/db/schema";
 import { ticketSchema } from "@/lib/validations";
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray, desc, or } from "drizzle-orm";
 import { sendNotification } from "@/lib/notify";
 import { isAfterHours } from "@/lib/after-hours";
 
+// ── GET: role-aware ticket listing ──────────────────────────────────────────
+export async function GET(req: Request) {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+
+        const userId = session.user.id;
+        const role = session.user.role;
+        const { searchParams } = new URL(req.url);
+        const filter = searchParams.get("filter");
+
+        let tickets: any[] = [];
+
+        if (role === "MANAGER") {
+            // Manager sees all tickets in their managed buildings
+            const manager = await db.query.usersTable.findFirst({
+                where: eq(usersTable.id, userId),
+                with: { managedBuildings: { columns: { id: true } } },
+            });
+            const buildingIds = manager?.managedBuildings?.map((b: any) => b.id) ?? [];
+            if (buildingIds.length > 0) {
+                tickets = await db.query.ticketsTable.findMany({
+                    where: buildingIds.length > 0 ? inArray(ticketsTable.buildingId, buildingIds) : undefined,
+                    orderBy: [desc(ticketsTable.updatedAt)],
+                    with: {
+                        building: { columns: { name: true } },
+                        tenant: { columns: { name: true } },
+                        technician: { columns: { name: true } },
+                    },
+                });
+            }
+        } else if (role === "TENANT") {
+            // Tenant sees only their own tickets
+            tickets = await db.query.ticketsTable.findMany({
+                where: eq(ticketsTable.tenantId, userId),
+                orderBy: [desc(ticketsTable.createdAt)],
+                with: {
+                    building: { columns: { name: true } },
+                    technician: { columns: { name: true } },
+                    images: { columns: { url: true, type: true } },
+                },
+            });
+        } else if (role === "TECHNICIAN") {
+            // Technician sees only assigned tickets
+            tickets = await db.query.ticketsTable.findMany({
+                where: eq(ticketsTable.technicianId, userId),
+                orderBy: [desc(ticketsTable.updatedAt)],
+                with: {
+                    building: { columns: { name: true, address: true } },
+                    tenant: { columns: { name: true, phone: true } },
+                },
+            });
+        }
+
+        return NextResponse.json(tickets);
+    } catch (error) {
+        console.error("GET /api/tickets error:", error);
+        return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
+    }
+}
+
+// ── POST: tenant creates a new ticket ───────────────────────────────────────
 export async function POST(req: Request) {
     try {
         const session = await auth();
         if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+
+        const role = session.user.role;
+        // Only tenants can create tickets
+        if (role !== "TENANT") {
+            return NextResponse.json({ message: "Only tenants can submit maintenance requests" }, { status: 403 });
+        }
 
         const userId = session.user.id;
         const body = await req.json();
@@ -18,7 +86,7 @@ export async function POST(req: Request) {
 
         // Fetch user's building
         const user = await db.query.usersTable.findFirst({
-            where: eq(usersTable.id, session.user.id!),
+            where: eq(usersTable.id, userId),
             columns: { buildingId: true, unitNumber: true },
         });
 
@@ -44,7 +112,7 @@ export async function POST(req: Request) {
             // Create Images
             if (validatedData.imageUrls && validatedData.imageUrls.length > 0) {
                 await tx.insert(ticketImagesTable).values(
-                    validatedData.imageUrls.map(url => ({
+                    validatedData.imageUrls.map((url) => ({
                         ticketId: ticket.id,
                         url,
                         uploadedBy: userId,
@@ -64,29 +132,48 @@ export async function POST(req: Request) {
             return ticket;
         });
 
-        // 2. Notify Manager (Async)
-        // Find manager for this building
+        // 2. Self-notify tenant (spec 5.5)
+        await sendNotification({
+            userId,
+            ticketId: result.id,
+            title: "✅ Ticket Received",
+            message: `Your request "${result.title}" has been submitted. A manager will assign a technician shortly.`,
+            type: "TICKET_CREATED",
+        });
+
+        // 3. Notify ALL managers for this building
         const building = await db.query.buildingsTable.findFirst({
             where: eq(buildingsTable.id, user.buildingId!),
-            columns: { managerId: true, name: true }
+            columns: { managerId: true, name: true },
         });
 
         if (building) {
-            await sendNotification({
-                userId: building.managerId,
-                ticketId: result.id,
-                title: "New Ticket Reported",
-                message: `Tenant in Unit ${user.unitNumber} (${building.name}) reported: ${result.title}`,
-                type: "TICKET_CREATED",
+            // Find all managers (the building's manager + any others)
+            const allManagers = await db.query.usersTable.findMany({
+                where: eq(usersTable.role, "MANAGER"),
+                columns: { id: true },
             });
+
+            await Promise.allSettled(
+                allManagers.map((m) =>
+                    sendNotification({
+                        userId: m.id,
+                        ticketId: result.id,
+                        title: "New Ticket Reported",
+                        message: `Tenant in Unit ${user.unitNumber} (${building.name}) reported: ${result.title}`,
+                        type: "TICKET_CREATED",
+                    })
+                )
+            );
         }
 
         return NextResponse.json(result, { status: 201 });
 
     } catch (error: any) {
         console.error("Ticket Creation Error:", error);
-        if (error.name === "ZodError") {
-            return NextResponse.json({ message: error.errors[0].message }, { status: 400 });
+        if (error?.name === "ZodError" || error?.issues) {
+            const message = error?.errors?.[0]?.message ?? error?.issues?.[0]?.message ?? "Invalid ticket data";
+            return NextResponse.json({ message }, { status: 400 });
         }
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
     }

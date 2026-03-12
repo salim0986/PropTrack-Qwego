@@ -1,21 +1,45 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { ticketsTable, ticketImagesTable, activityLogsTable } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import {
+    ticketsTable, ticketImagesTable, activityLogsTable, usersTable, buildingsTable, notificationsTable
+} from "@/db/schema";
+import { ticketStatusEnum } from "@/db/schema";
+import { eq, and, desc, inArray, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { sendNotification } from "@/lib/notify";
 import { z } from "zod";
 
 const statusUpdateSchema = z.discriminatedUnion("action", [
+    // Technician: on the way (idempotent — does NOT change status)
     z.object({ action: z.literal("ON_THE_WAY") }),
-    z.object({ action: z.literal("BLOCK"), blockReason: z.string().min(5) }),
+
+    // Technician: start the job → IN_PROGRESS
+    z.object({ action: z.literal("START") }),
+
+    // Technician: mark blocked (mandatory reason)
+    z.object({ action: z.literal("BLOCK"), blockReason: z.string().min(5, "Please provide a block reason") }),
+
+    // Technician: complete with mandatory proof (1-3 photos, 20+ char note)
     z.object({
         action: z.literal("COMPLETE"),
         resolutionNotes: z.string().min(20, "Resolution notes must be at least 20 characters"),
-        imageUrl: z.string().url("A proof photo URL is required"),
+        imageUrls: z
+            .array(z.string().url("Each item must be a valid URL"))
+            .min(1, "At least 1 resolution photo is required")
+            .max(3, "Maximum of 3 resolution photos"),
     }),
-    z.object({ action: z.literal("REOPEN") }),
-    z.object({ action: z.literal("UNBLOCK") }),
+
+    // Manager: reopen DONE ticket (mandatory reason - Rule 12)
+    z.object({
+        action: z.literal("REOPEN"),
+        reason: z.string().min(10, "Please provide a detailed reason for reopening"),
+    }),
+
+    // Technician: unblock (mandatory note - Rule 12)
+    z.object({
+        action: z.literal("UNBLOCK"),
+        unblockNote: z.string().min(10, "Please describe how the block was resolved"),
+    }),
 ]);
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -25,47 +49,112 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
         const userId = session.user.id;
+        const role = session.user.role;
         const body = await req.json();
         const parsed = statusUpdateSchema.parse(body);
 
-        // Fetch ticket to verify ownership
         const ticket = await db.query.ticketsTable.findFirst({
             where: eq(ticketsTable.id, id),
-            with: { building: true, tenant: true },
+            with: {
+                building: { columns: { managerId: true, name: true } },
+                tenant: { columns: { name: true, id: true } },
+                technician: { columns: { name: true } },
+            },
         });
 
         if (!ticket) return NextResponse.json({ message: "Ticket not found" }, { status: 404 });
 
-        // Only the assigned technician or a manager can update
-        const isAssigned = ticket.technicianId === userId;
-        const isTech = session.user.role === "TECHNICIAN";
-        const isManager = session.user.role === "MANAGER";
+        const isAssignedTech = ticket.technicianId === userId;
+        const isManager = role === "MANAGER";
+        const isTech = role === "TECHNICIAN";
 
-        if (!isAssigned && !isManager) {
-            return NextResponse.json({ message: "Not authorized for this ticket" }, { status: 403 });
-        }
-
+        // ── ON_THE_WAY ──────────────────────────────────────────────────────────
         if (parsed.action === "ON_THE_WAY") {
-            await db.transaction(async (tx) => {
-                await tx.update(ticketsTable).set({ status: "IN_PROGRESS" }).where(eq(ticketsTable.id, id));
-                await tx.insert(activityLogsTable).values({
-                    ticketId: id,
-                    actorId: userId,
-                    action: "ON_THE_WAY",
-                    message: "Technician is on the way",
-                });
+            if (!isAssignedTech) {
+                return NextResponse.json({ message: "Only the assigned technician can do this" }, { status: 403 });
+            }
+
+            // Idempotency check: look for an existing ON_THE_WAY activity on this ticket
+            const recentOnWay = await db.query.activityLogsTable.findFirst({
+                where: and(
+                    eq(activityLogsTable.ticketId, id),
+                    eq(activityLogsTable.actorId, userId),
+                    eq(activityLogsTable.action, "ON_THE_WAY")
+                ),
             });
 
-            // Notify tenant
+            if (recentOnWay) {
+                return NextResponse.json({ success: true, alreadySent: true });
+            }
+
+            // Log activity only — status stays ASSIGNED (tech hasn't started yet)
+            await db.insert(activityLogsTable).values({
+                ticketId: id,
+                actorId: userId,
+                action: "ON_THE_WAY",
+                message: "Technician is on the way to the unit",
+            });
+
             await sendNotification({
                 userId: ticket.tenantId,
                 ticketId: id,
-                title: "Technician On The Way",
-                message: `Your ticket "${ticket.title}" is being attended to. Technician is en route.`,
+                title: "Technician On The Way 🚗",
+                message: `${ticket.technician?.name || "Your technician"} is heading to Unit ${ticket.unitNumber}. Please be available.`,
                 type: "ON_THE_WAY",
             });
+        }
 
-        } else if (parsed.action === "BLOCK") {
+        // ── START ────────────────────────────────────────────────────────────────
+        else if (parsed.action === "START") {
+            if (!isAssignedTech) {
+                return NextResponse.json({ message: "Only the assigned technician can start this job" }, { status: 403 });
+            }
+            if (!["ASSIGNED", "REOPENED"].includes(ticket.status)) {
+                return NextResponse.json({ message: "Ticket is not in a startable state" }, { status: 400 });
+            }
+
+            await db.transaction(async (tx) => {
+                await tx.update(ticketsTable)
+                    .set({ status: "IN_PROGRESS" })
+                    .where(eq(ticketsTable.id, id));
+                await tx.insert(activityLogsTable).values({
+                    ticketId: id,
+                    actorId: userId,
+                    action: "STATUS_CHANGED",
+                    oldValue: ticket.status,
+                    newValue: "IN_PROGRESS",
+                    message: "Technician started work on the ticket",
+                });
+            });
+
+            // Notify tenant and manager
+            await Promise.allSettled([
+                sendNotification({
+                    userId: ticket.tenantId,
+                    ticketId: id,
+                    title: "Work Started",
+                    message: `${ticket.technician?.name || "A technician"} has started working on "${ticket.title}".`,
+                    type: "STATUS_CHANGED",
+                }),
+                ticket.building.managerId && sendNotification({
+                    userId: ticket.building.managerId,
+                    ticketId: id,
+                    title: "Job In Progress",
+                    message: `"${ticket.title}" is now IN_PROGRESS.`,
+                    type: "STATUS_CHANGED",
+                }),
+            ]);
+        }
+
+        // ── BLOCK ────────────────────────────────────────────────────────────────
+        else if (parsed.action === "BLOCK") {
+            if (!isAssignedTech) {
+                return NextResponse.json({ message: "Only the assigned technician can mark a block" }, { status: 403 });
+            }
+            if (!["IN_PROGRESS", "ASSIGNED"].includes(ticket.status)) {
+                return NextResponse.json({ message: "Can only block tickets that are in progress or assigned" }, { status: 400 });
+            }
+
             await db.transaction(async (tx) => {
                 await tx.update(ticketsTable)
                     .set({ status: "BLOCKED", blockReason: parsed.blockReason })
@@ -74,94 +163,187 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     ticketId: id,
                     actorId: userId,
                     action: "BLOCKED",
+                    oldValue: ticket.status,
+                    newValue: "BLOCKED",
                     message: parsed.blockReason,
                 });
             });
 
-            // Notify manager
-            if (ticket.building.managerId) {
-                await sendNotification({
+            await Promise.allSettled([
+                ticket.building.managerId && sendNotification({
                     userId: ticket.building.managerId,
                     ticketId: id,
-                    title: "Ticket Blocked",
-                    message: `Ticket "${ticket.title}" has been blocked. Reason: ${parsed.blockReason}`,
+                    title: "⚠️ Ticket Blocked",
+                    message: `"${ticket.title}" is on hold — ${parsed.blockReason}`,
                     type: "BLOCKED",
-                });
+                }),
+                sendNotification({
+                    userId: ticket.tenantId,
+                    ticketId: id,
+                    title: "Work Paused",
+                    message: `Your ticket "${ticket.title}" is temporarily on hold: ${parsed.blockReason}`,
+                    type: "BLOCKED",
+                }),
+            ]);
+        }
+
+        // ── COMPLETE ─────────────────────────────────────────────────────────────
+        else if (parsed.action === "COMPLETE") {
+            if (!isAssignedTech) {
+                return NextResponse.json({ message: "Only the assigned technician can complete this ticket" }, { status: 403 });
+            }
+            if (ticket.status !== "IN_PROGRESS") {
+                return NextResponse.json({ message: "Can only complete tickets that are IN_PROGRESS" }, { status: 400 });
             }
 
-        } else if (parsed.action === "COMPLETE") {
             await db.transaction(async (tx) => {
                 await tx.update(ticketsTable)
                     .set({
                         status: "DONE",
                         resolutionNotes: parsed.resolutionNotes,
                         resolvedAt: new Date(),
+                        completionVerified: false,  // pending manager review; manager opens/disputes to reject
                     })
                     .where(eq(ticketsTable.id, id));
 
-                // Add resolution image
-                await tx.insert(ticketImagesTable).values({
-                    ticketId: id,
-                    url: parsed.imageUrl,
-                    uploadedBy: userId,
-                    type: "RESOLUTION",
-                });
+                // Insert resolution images only when provided (values([]) would break in SQL)
+                if (parsed.imageUrls.length > 0) {
+                    await tx.insert(ticketImagesTable).values(
+                        parsed.imageUrls.map((url: string) => ({
+                            ticketId: id,
+                            url,
+                            uploadedBy: userId,
+                            type: "RESOLUTION" as const,
+                        }))
+                    );
+                }
 
                 await tx.insert(activityLogsTable).values({
                     ticketId: id,
                     actorId: userId,
                     action: "COMPLETION_SUBMITTED",
+                    oldValue: "IN_PROGRESS",
+                    newValue: "DONE",
                     message: parsed.resolutionNotes,
                 });
             });
 
             // Notify manager and tenant
-            const notifications = [];
-            if (ticket.building.managerId) {
-                notifications.push(sendNotification({
+            await Promise.allSettled([
+                ticket.building.managerId && sendNotification({
                     userId: ticket.building.managerId,
                     ticketId: id,
-                    title: "Completion Submitted",
-                    message: `Ticket "${ticket.title}" marked complete. Verify and close.`,
+                    title: "✅ Job Completed",
+                    message: `"${ticket.title}" has been marked complete by ${ticket.technician?.name || "technician"}.`,
                     type: "COMPLETION_SUBMITTED",
-                }));
-            }
-            notifications.push(sendNotification({
-                userId: ticket.tenantId,
-                ticketId: id,
-                title: "Your issue has been resolved",
-                message: `Ticket "${ticket.title}" has been marked as resolved. Please rate your experience.`,
-                type: "COMPLETION_SUBMITTED",
-            }));
-            await Promise.allSettled(notifications);
+                }),
+                sendNotification({
+                    userId: ticket.tenantId,
+                    ticketId: id,
+                    title: "Issue Resolved ✅",
+                    message: `Your ticket "${ticket.title}" has been marked as resolved. Please rate your experience.`,
+                    type: "COMPLETION_SUBMITTED",
+                }),
+            ]);
+        }
 
-        } else if (parsed.action === "REOPEN") {
+        // ── REOPEN ───────────────────────────────────────────────────────────────
+        else if (parsed.action === "REOPEN") {
+            if (!isManager) {
+                return NextResponse.json({ message: "Only managers can reopen tickets" }, { status: 403 });
+            }
+            if (ticket.status !== "DONE") {
+                return NextResponse.json({ message: "Only DONE tickets can be reopened" }, { status: 400 });
+            }
+
             await db.transaction(async (tx) => {
+                // Void the completion record
                 await tx.update(ticketsTable)
-                    .set({ status: "REOPENED", completionVerified: false, resolvedAt: null, resolutionNotes: null })
+                    .set({
+                        status: "REOPENED",
+                        completionVerified: false,
+                        resolvedAt: null,
+                        resolutionNotes: null,
+                    })
                     .where(eq(ticketsTable.id, id));
+
                 await tx.insert(activityLogsTable).values({
-                    ticketId: id, actorId: userId, action: "REOPENED",
-                    message: "Ticket reopened — completion disputed",
+                    ticketId: id,
+                    actorId: userId,
+                    action: "REOPENED",
+                    oldValue: "DONE",
+                    newValue: "REOPENED",
+                    message: `Reopened: ${parsed.reason}`,
                 });
             });
-        } else if (parsed.action === "UNBLOCK") {
+
+            // Notify technician and tenant
+            await Promise.allSettled([
+                ticket.technicianId && sendNotification({
+                    userId: ticket.technicianId,
+                    ticketId: id,
+                    title: "⚠️ Completion Disputed",
+                    message: `Your completion for "${ticket.title}" was disputed. Reason: ${parsed.reason}`,
+                    type: "COMPLETION_DISPUTED",
+                }),
+                sendNotification({
+                    userId: ticket.tenantId,
+                    ticketId: id,
+                    title: "Ticket Reopened",
+                    message: `Your ticket "${ticket.title}" has been reopened for further review.`,
+                    type: "COMPLETION_DISPUTED",
+                }),
+            ]);
+        }
+
+        // ── UNBLOCK ──────────────────────────────────────────────────────────────
+        else if (parsed.action === "UNBLOCK") {
+            if (!isAssignedTech && !isManager) {
+                return NextResponse.json({ message: "Not authorized to unblock this ticket" }, { status: 403 });
+            }
+            if (ticket.status !== "BLOCKED") {
+                return NextResponse.json({ message: "Ticket is not currently blocked" }, { status: 400 });
+            }
+
             await db.transaction(async (tx) => {
                 await tx.update(ticketsTable)
                     .set({ status: "IN_PROGRESS", blockReason: null })
                     .where(eq(ticketsTable.id, id));
+
                 await tx.insert(activityLogsTable).values({
-                    ticketId: id, actorId: userId, action: "UNBLOCKED",
-                    message: "Ticket unblocked by manager",
+                    ticketId: id,
+                    actorId: userId,
+                    action: "UNBLOCKED",
+                    oldValue: "BLOCKED",
+                    newValue: "IN_PROGRESS",
+                    message: `Block resolved: ${parsed.unblockNote}`,
                 });
             });
+
+            await Promise.allSettled([
+                ticket.building.managerId && sendNotification({
+                    userId: ticket.building.managerId,
+                    ticketId: id,
+                    title: "Block Resolved",
+                    message: `Work has resumed on "${ticket.title}". ${parsed.unblockNote}`,
+                    type: "UNBLOCKED",
+                }),
+                sendNotification({
+                    userId: ticket.tenantId,
+                    ticketId: id,
+                    title: "Work Resumed",
+                    message: `Work has resumed on "${ticket.title}".`,
+                    type: "UNBLOCKED",
+                }),
+            ]);
         }
 
         return NextResponse.json({ success: true });
 
     } catch (error: any) {
-        if (error.name === "ZodError") {
-            return NextResponse.json({ message: error.errors[0].message }, { status: 400 });
+        if (error?.name === "ZodError" || error?.issues) {
+            const message = error?.errors?.[0]?.message ?? error?.issues?.[0]?.message ?? "Invalid request data";
+            return NextResponse.json({ message }, { status: 400 });
         }
         console.error("Status update error:", error);
         return NextResponse.json({ message: "Internal server error" }, { status: 500 });
