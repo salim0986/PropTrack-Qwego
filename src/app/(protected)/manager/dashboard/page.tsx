@@ -1,16 +1,15 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { ticketsTable, usersTable } from "@/db/schema";
-import { eq, and, or, desc, inArray, not } from "drizzle-orm";
+import { eq, and, desc, inArray, not } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import { PriorityBadge } from "@/components/shared/PriorityBadge";
 import { AfterHoursBanner } from "@/components/shared/AfterHoursBanner";
 import { isAfterHours } from "@/lib/after-hours";
 import {
     LayoutDashboard, AlertTriangle, Clock, CheckCircle2,
-    ChevronRight, Moon, Flame, XCircle, Users, TrendingUp
+    ChevronRight, Moon, Flame, Users
 } from "lucide-react";
 
 export default async function ManagerDashboard() {
@@ -44,7 +43,6 @@ export default async function ManagerDashboard() {
     // Categorize tickets for triage
     const now = new Date();
     const fourHoursAgo = new Date(now.getTime() - 4 * 60 * 60 * 1000);
-    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
     const stalledTickets = allTickets.filter(t =>
         t.status === "ASSIGNED" && new Date(t.updatedAt) < fourHoursAgo

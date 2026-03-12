@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AfterHoursBanner } from "@/components/shared/AfterHoursBanner";
+import { isAfterHours } from "@/lib/after-hours";
 import { cn } from "@/lib/utils";
 
 const CATEGORIES = ["PLUMBING", "ELECTRICAL", "HVAC", "STRUCTURAL", "OTHER"] as const;
@@ -32,6 +33,7 @@ export default function NewTicketPage() {
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
     const [imageUrls, setImageUrls] = useState<string[]>([]);
+    const afterHours = isAfterHours();
 
     async function uploadPhoto(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0];
@@ -79,7 +81,7 @@ export default function NewTicketPage() {
 
     return (
         <div className="flex flex-col gap-4 p-4 pb-28">
-            <AfterHoursBanner />
+            <AfterHoursBanner isAfterHours={afterHours} />
 
             {/* Header */}
             <div className="flex items-center gap-3 pt-1">

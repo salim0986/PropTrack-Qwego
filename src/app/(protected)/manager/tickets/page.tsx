@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { PriorityBadge } from "@/components/shared/PriorityBadge";
-import { ArrowLeft, Filter, Search } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 type FilterType = "all" | "unassigned" | "blocked" | "stalled" | "overnight" | "urgent";
 

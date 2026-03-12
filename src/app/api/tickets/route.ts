@@ -3,20 +3,18 @@ import { db } from "@/db";
 import { ticketsTable, ticketImagesTable, activityLogsTable, usersTable, buildingsTable } from "@/db/schema";
 import { ticketSchema } from "@/lib/validations";
 import { NextResponse } from "next/server";
-import { eq, and, inArray, desc, or } from "drizzle-orm";
+import { eq, inArray, desc } from "drizzle-orm";
 import { sendNotification } from "@/lib/notify";
 import { isAfterHours } from "@/lib/after-hours";
 
 // ── GET: role-aware ticket listing ──────────────────────────────────────────
-export async function GET(req: Request) {
+export async function GET() {
     try {
         const session = await auth();
         if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
         const userId = session.user.id;
         const role = session.user.role;
-        const { searchParams } = new URL(req.url);
-        const filter = searchParams.get("filter");
 
         let tickets: any[] = [];
 

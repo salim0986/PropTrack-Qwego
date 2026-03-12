@@ -26,7 +26,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         if (!ticket) return NextResponse.json({ message: "Not found" }, { status: 404 });
 
         return NextResponse.json(ticket);
-    } catch (e) {
+    } catch {
         return NextResponse.json({ message: "Internal server error" }, { status: 500 });
     }
 }

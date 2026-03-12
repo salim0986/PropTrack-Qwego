@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Bell, BellOff, CheckCheck, ChevronRight } from "lucide-react";
+import { BellOff, CheckCheck, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -27,8 +27,6 @@ export function NotificationsClient({
 }) {
     const [notifications, setNotifications] = useState(initial);
     const [markingAll, setMarkingAll] = useState(false);
-
-    const dashPath = `/${role.toLowerCase()}/dashboard`;
 
     async function markRead(id: string) {
         setNotifications((prev) =>

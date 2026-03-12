@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { ArrowLeft, Camera, CheckCircle2, Loader2, X, Upload, Lock } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ArrowLeft, Camera, CheckCircle2, Loader2, X, Lock } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -19,7 +18,6 @@ export default function CompleteTicketPage() {
     const fileRef = useRef<HTMLInputElement>(null);
 
     const [notes, setNotes] = useState("");
-    const [imageFile, setImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [uploading, setUploading] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -32,7 +30,6 @@ export default function CompleteTicketPage() {
     async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0];
         if (!file) return;
-        setImageFile(file);
         setImagePreview(URL.createObjectURL(file));
 
         // Auto-upload
@@ -48,7 +45,6 @@ export default function CompleteTicketPage() {
             toast.success("Photo uploaded");
         } catch {
             toast.error("Upload failed — try again");
-            setImageFile(null);
             setImagePreview(null);
         } finally {
             setUploading(false);
@@ -194,7 +190,7 @@ export default function CompleteTicketPage() {
                                     </div>
                                 )}
                                 <button
-                                    onClick={() => { setImageFile(null); setImagePreview(null); setUploadedUrl(null); }}
+                                    onClick={() => { setImagePreview(null); setUploadedUrl(null); }}
                                     className="mt-2 text-xs text-pt-text-muted hover:text-pt-red flex items-center gap-1"
                                 >
                                     <X className="w-3 h-3" /> Remove photo

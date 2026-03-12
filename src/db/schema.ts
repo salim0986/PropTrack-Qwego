@@ -152,8 +152,9 @@ export const usersRelations = relations(usersTable, ({ one, many }) => ({
   building: one(buildingsTable, {
     fields: [usersTable.buildingId],
     references: [buildingsTable.id],
+    relationName: "building_residents",
   }),
-  managedBuildings: many(buildingsTable),
+  managedBuildings: many(buildingsTable, { relationName: "building_manager" }),
   ticketsAsTenant: many(ticketsTable, { relationName: "tenant_tickets" }),
   ticketsAsTechnician: many(ticketsTable, { relationName: "technician_tickets" }),
   activityLogs: many(activityLogsTable),
@@ -173,8 +174,9 @@ export const buildingsRelations = relations(buildingsTable, ({ one, many }) => (
   manager: one(usersTable, {
     fields: [buildingsTable.managerId],
     references: [usersTable.id],
+    relationName: "building_manager",
   }),
-  residents: many(usersTable),
+  residents: many(usersTable, { relationName: "building_residents" }),
   tickets: many(ticketsTable),
   escalationRules: many(escalationRulesTable),
 }));

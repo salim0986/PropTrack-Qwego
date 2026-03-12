@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
     ticketSchema,
-    blockTicketSchema,
     completeTicketSchema,
     registerSchema,
     reopenTicketSchema,

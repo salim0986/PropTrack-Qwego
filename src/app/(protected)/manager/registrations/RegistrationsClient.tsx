@@ -3,9 +3,8 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle2, XCircle, Clock, Loader2, Wrench, User } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, Loader2, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
 interface RegistrationRequest {
     id: string;

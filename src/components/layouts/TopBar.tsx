@@ -3,7 +3,6 @@
 import { useSession, signOut } from "next-auth/react";
 import { LogOut, Bell, Building } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
 interface TopBarProps {
     title?: string;

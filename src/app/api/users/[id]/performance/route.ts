@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { ticketsTable, ticketRatingsTable, activityLogsTable, usersTable } from "@/db/schema";
-import { eq, and, count, avg } from "drizzle-orm";
+import { ticketsTable, usersTable } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 // GET /api/users/[id]/performance — technician performance stats for manager

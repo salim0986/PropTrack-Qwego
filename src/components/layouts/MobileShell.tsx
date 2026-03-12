@@ -1,7 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-interface MobileShellProps extends React.HTMLAttributes<HTMLDivElement> { }
+type MobileShellProps = React.HTMLAttributes<HTMLDivElement>;
 
 /**
  * MobileShell restricts the container width to match mobile dimensions

@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Clock, XCircle, Building, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,7 +8,6 @@ import Link from "next/link";
 import { Suspense } from "react";
 
 function PendingContent() {
-    const router = useRouter();
     const searchParams = useSearchParams();
     const status = searchParams.get("status") || "PENDING";
     const reason = searchParams.get("reason") || null;
@@ -53,7 +51,7 @@ function PendingContent() {
                     {/* Rejection Reason */}
                     {!isPending && reason && (
                         <div className="w-full bg-pt-red/10 border border-pt-red/30 rounded-xl p-4 mb-6 text-left">
-                            <p className="text-xs font-semibold text-pt-red mb-1">Manager's Note:</p>
+                            <p className="text-xs font-semibold text-pt-red mb-1">Manager&apos;s Note:</p>
                             <p className="text-sm text-pt-text">{reason}</p>
                         </div>
                     )}

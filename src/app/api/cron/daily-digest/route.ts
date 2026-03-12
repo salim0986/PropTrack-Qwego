@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { ticketsTable, usersTable } from "@/db/schema";
-import { eq, and, inArray, count } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { sendNotification } from "@/lib/notify";
 

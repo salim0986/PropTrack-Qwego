@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import {
-    ArrowLeft, Wrench, MapPin, Clock, User, AlertTriangle,
+    ArrowLeft, MapPin, Clock, User, AlertTriangle,
     CheckCircle2, XCircle, Navigation, ChevronDown, ChevronUp,
     Image as ImageIcon, Calendar
 } from "lucide-react";
@@ -244,7 +244,7 @@ export default function TechnicianTaskDetail() {
                 {onWaySent && (
                     <div className="bg-pt-green/10 border border-pt-green/30 rounded-xl p-3 flex items-center gap-2 justify-center">
                         <CheckCircle2 className="w-4 h-4 text-pt-green" />
-                        <p className="text-sm text-pt-green font-medium">Tenant notified — you're on the way!</p>
+                        <p className="text-sm text-pt-green font-medium">Tenant notified — you&apos;re on the way!</p>
                     </div>
                 )}
 

@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { notificationsTable, usersTable } from "@/db/schema";
+import { notificationsTable } from "@/db/schema";
 import type { notificationTypeEnum } from "@/db/schema";
 
 type NotificationType = typeof notificationTypeEnum.enumValues[number];

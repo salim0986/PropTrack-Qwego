@@ -3,12 +3,9 @@ import {
     usersTable,
     buildingsTable,
     ticketsTable,
-    ticketImagesTable,
     activityLogsTable,
     notificationsTable,
-    registrationRequestsTable,
-    ticketRatingsTable,
-    escalationRulesTable
+    registrationRequestsTable
 } from "./schema";
 import * as bcrypt from "bcryptjs";
 
@@ -28,7 +25,7 @@ async function main() {
     }).returning();
 
     // 2. Seed Buildings
-    const [elmCourt, mapleTower, birchPlaza] = await db.insert(buildingsTable).values([
+    const [elmCourt, mapleTower] = await db.insert(buildingsTable).values([
         { name: "Elm Court", address: "100 Elm St.", managerId: manager.id },
         { name: "Maple Tower", address: "200 Maple Ave.", managerId: manager.id },
         { name: "Birch Plaza", address: "300 Birch Blvd.", managerId: manager.id },

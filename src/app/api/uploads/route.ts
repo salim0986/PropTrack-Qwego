@@ -43,7 +43,7 @@ export async function POST(req: Request) {
         const ext = file.type.split("/")[1];
         const filename = `tickets/${session.user.id}/${Date.now()}.${ext}`;
 
-        const { data, error } = await supabase.storage
+        const { error } = await supabase.storage
             .from("proptrack")
             .upload(filename, buffer, {
                 contentType: file.type,

@@ -108,7 +108,8 @@ describe("POST /api/auth/register", () => {
     });
 
     it("returns 400 when name is missing", async () => {
-        const { name, ...rest } = tenantBody;
+        const rest = { ...tenantBody };
+        delete (rest as any).name;
         const res = await POST(makeRequest(rest as any));
         expect(res.status).toBe(400);
     });

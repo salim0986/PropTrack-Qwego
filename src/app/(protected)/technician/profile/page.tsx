@@ -8,15 +8,6 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { signOut } from "next-auth/react";
 
-const SPECIALTIES = ["PLUMBING", "ELECTRICAL", "HVAC", "STRUCTURAL", "GENERAL"] as const;
-const SPECIALTY_COLORS: Record<string, string> = {
-    PLUMBING: "text-pt-blue bg-pt-blue/10 border-pt-blue/20",
-    ELECTRICAL: "text-pt-yellow bg-pt-yellow/10 border-pt-yellow/20",
-    HVAC: "text-pt-purple bg-pt-purple/10 border-pt-purple/20",
-    STRUCTURAL: "text-pt-accent bg-pt-accent/10 border-pt-accent/20",
-    GENERAL: "text-pt-green bg-pt-green/10 border-pt-green/20",
-};
-
 interface Stats {
     jobsCompleted: number;
     avgCompletionHours: number | null;

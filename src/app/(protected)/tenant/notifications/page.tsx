@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { notificationsTable, ticketsTable } from "@/db/schema";
+import { notificationsTable } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { NotificationsClient } from "./NotificationsClient";

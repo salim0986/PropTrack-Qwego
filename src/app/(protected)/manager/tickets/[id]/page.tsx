@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import {
     ArrowLeft, User, Wrench, CheckCircle2, XCircle, AlertTriangle,
-    RefreshCw, Link as LinkIcon, ChevronDown, ChevronUp, Loader2, Clock
+    RefreshCw, Link as LinkIcon, ChevronDown, ChevronUp, Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";

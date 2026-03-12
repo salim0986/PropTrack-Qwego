@@ -1,6 +1,3 @@
-require("dotenv").config({ path: ".env" });
-require("dotenv").config({ path: ".env.local", override: true });
-
 function requireEnv(name) {
   const value = process.env[name];
   if (!value) {
@@ -10,6 +7,10 @@ function requireEnv(name) {
 }
 
 async function main() {
+  const { default: dotenv } = await import("dotenv");
+  dotenv.config({ path: ".env" });
+  dotenv.config({ path: ".env.local", override: true });
+
   const token = requireEnv("TELEGRAM_BOT_TOKEN");
   const secret = requireEnv("TELEGRAM_WEBHOOK_SECRET");
   const appUrl = requireEnv("NEXT_PUBLIC_APP_URL").replace(/\/$/, "");

@@ -84,7 +84,8 @@ describe("sendNotification", () => {
 
     it("inserts notification without ticketId when ticketId is omitted", async () => {
         mockFindFirst.mockResolvedValue({ telegramChatId: null, discordWebhook: null });
-        const { ticketId, ...noTicketPayload } = basePayload;
+        const noTicketPayload = { ...basePayload };
+        delete (noTicketPayload as any).ticketId;
         await sendNotification(noTicketPayload);
         expect(mockInsert).toHaveBeenCalledOnce();
     });

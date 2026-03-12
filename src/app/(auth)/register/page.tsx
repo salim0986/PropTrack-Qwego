@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Building, ArrowRight, Loader2, User, Wrench, ChevronRight } from "lucide-react";
+import { Building, ArrowRight, Loader2, User, Wrench } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";

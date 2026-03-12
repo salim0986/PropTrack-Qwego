@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { ticketsTable, ticketRatingsTable, activityLogsTable } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { rateTicketSchema } from "@/lib/validations";
 import { sendNotification } from "@/lib/notify";

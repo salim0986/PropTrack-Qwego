@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { registrationRequestsTable, usersTable } from "@/db/schema";
+import { registrationRequestsTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { ManagerRegistrationsClient } from "./RegistrationsClient";

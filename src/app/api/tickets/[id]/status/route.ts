@@ -1,10 +1,9 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import {
-    ticketsTable, ticketImagesTable, activityLogsTable, usersTable, buildingsTable, notificationsTable
+    ticketsTable, ticketImagesTable, activityLogsTable
 } from "@/db/schema";
-import { ticketStatusEnum } from "@/db/schema";
-import { eq, and, desc, inArray, or } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { sendNotification } from "@/lib/notify";
 import { z } from "zod";
@@ -66,7 +65,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         const isAssignedTech = ticket.technicianId === userId;
         const isManager = role === "MANAGER";
-        const isTech = role === "TECHNICIAN";
 
         // ── ON_THE_WAY ──────────────────────────────────────────────────────────
         if (parsed.action === "ON_THE_WAY") {

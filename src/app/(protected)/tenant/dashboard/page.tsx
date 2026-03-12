@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { ticketsTable } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
-import { Plus, Ticket, MessageSquare, ArrowRight } from "lucide-react";
+import { Plus, Ticket, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { PriorityBadge } from "@/components/shared/PriorityBadge";

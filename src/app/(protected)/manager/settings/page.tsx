@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Settings, Bell, Clock, Phone, ChevronLeft, Loader2, CheckCircle2, Plus, Trash2 } from "lucide-react";
+import { Settings, Bell, Clock, Phone, Loader2, CheckCircle2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,7 +29,6 @@ interface EscalationRule {
 }
 
 export default function ManagerSettingsPage() {
-    const { data: session } = useSession();
     const [buildingId, setBuildingId] = useState<string | null>(null);
     const [settings, setSettings] = useState<BuildingSettings | null>(null);
     const [rules, setRules] = useState<EscalationRule[]>([]);

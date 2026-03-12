@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { ticketsTable, usersTable } from "@/db/schema";
-import { eq, and, or, desc, not, inArray } from "drizzle-orm";
+import { ticketsTable } from "@/db/schema";
+import { eq, and, desc, not, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -109,7 +109,7 @@ export default async function TechnicianDashboard() {
                             <CheckCircle2 className="w-7 h-7 text-pt-green" />
                         </div>
                         <p className="text-pt-text font-medium">All clear!</p>
-                        <p className="text-pt-text-muted text-sm">No active tasks. You're all caught up.</p>
+                        <p className="text-pt-text-muted text-sm">No active tasks. You&apos;re all caught up.</p>
                     </div>
                 ) : (
                     <div className="flex flex-col gap-3">
